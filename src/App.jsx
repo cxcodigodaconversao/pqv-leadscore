@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Upload, TrendingUp, Users, Award, Target, FileSpreadsheet } from 'lucide-react';
+import { Upload, TrendingUp, Users, Award, Target, FileSpreadsheet, Info, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import './App.css';
 
@@ -9,6 +9,7 @@ const App = () => {
   const [dragActive, setDragActive] = useState(false);
   const [fileName, setFileName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
 
   // Cores para cada categoria ICP
   const ICP_COLORS = {
@@ -151,7 +152,120 @@ const App = () => {
       <div className="header">
         <h1>Dashboard ICP</h1>
         <p>Análise Inteligente de Qualificação de Leads</p>
+        <button className="legend-button" onClick={() => setShowLegend(true)}>
+          <Info size={20} />
+          Ver Critérios de Pontuação
+        </button>
       </div>
+
+      {/* Modal de Legenda */}
+      {showLegend && (
+        <div className="modal-overlay" onClick={() => setShowLegend(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>📊 Critérios de Pontuação (Score)</h2>
+              <button className="modal-close" onClick={() => setShowLegend(false)}>
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="criteria-grid">
+                {/* Renda */}
+                <div className="criteria-card">
+                  <h3>💰 Renda (Renda_pts)</h3>
+                  <table className="criteria-table">
+                    <tbody>
+                      <tr><td>+20k</td><td className="score-badge">4</td></tr>
+                      <tr><td>10k–20k</td><td className="score-badge">3</td></tr>
+                      <tr><td>5k–10,5k</td><td className="score-badge">2</td></tr>
+                      <tr><td>3k–5k</td><td className="score-badge">1</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Escolaridade */}
+                <div className="criteria-card">
+                  <h3>🎓 Escolaridade (Escolaridade_pts)</h3>
+                  <table className="criteria-table">
+                    <tbody>
+                      <tr><td>Pós / Mestrado / Doutorado</td><td className="score-badge">3</td></tr>
+                      <tr><td>Superior</td><td className="score-badge">2</td></tr>
+                      <tr><td>Ensino Médio</td><td className="score-badge">1</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Produto Digital */}
+                <div className="criteria-card">
+                  <h3>💻 Produto Digital (ProdutoDigital_pts)</h3>
+                  <table className="criteria-table">
+                    <tbody>
+                      <tr><td>Já vende bem</td><td className="score-badge">3</td></tr>
+                      <tr><td>Tem, mas vende pouco</td><td className="score-badge">2</td></tr>
+                      <tr><td>Tentou / tem ideia</td><td className="score-badge">1</td></tr>
+                      <tr><td>Não tem</td><td className="score-badge">0</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Tempo Semanal */}
+                <div className="criteria-card">
+                  <h3>⏰ Tempo Semanal (Tempo_pts)</h3>
+                  <table className="criteria-table">
+                    <tbody>
+                      <tr><td>+20h</td><td className="score-badge">3</td></tr>
+                      <tr><td>11–20h</td><td className="score-badge">3</td></tr>
+                      <tr><td>6–10h</td><td className="score-badge">2</td></tr>
+                      <tr><td>2–5h</td><td className="score-badge">1</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Liquidez / Comportamento de Compra */}
+                <div className="criteria-card full-width">
+                  <h3>💳 Liquidez / Comportamento de Compra (Liquidez_pts)</h3>
+                  <table className="criteria-table">
+                    <tbody>
+                      <tr><td>Pagou à vista / PIX alto / entrada alta</td><td className="score-badge">3</td></tr>
+                      <tr><td>Cartão com limite (limite comprometido)</td><td className="score-badge">2</td></tr>
+                      <tr><td>Parcelamento recorrente / parcelado com entrada</td><td className="score-badge">1</td></tr>
+                      <tr><td>Sem dado / não pago / saiu</td><td className="score-badge">0</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Classificação Final */}
+              <div className="classification-section">
+                <h2>🎯 Classificação Final ICP (por ScoreFinal)</h2>
+                <div className="classification-grid">
+                  <div className="classification-item elite">
+                    <div className="class-badge">ICP 1 ELITE</div>
+                    <div className="class-score">Score ≥ 13</div>
+                  </div>
+                  <div className="classification-item black">
+                    <div className="class-badge">ICP 1 BLACK</div>
+                    <div className="class-score">Score ≥ 10</div>
+                  </div>
+                  <div className="classification-item regular">
+                    <div className="class-badge">ICP 2 REGULAR</div>
+                    <div className="class-score">Score entre 6 e 9</div>
+                  </div>
+                  <div className="classification-item baixo">
+                    <div className="class-badge">ICP 3 BAIXO</div>
+                    <div className="class-score">Score entre 1 e 5</div>
+                  </div>
+                  <div className="classification-item sem-dados">
+                    <div className="class-badge">ICP 4 (sem dados)</div>
+                    <div className="class-score">Score = 0 ou sem resposta</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!data && !loading && (
         <div
