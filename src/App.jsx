@@ -26,48 +26,93 @@ const App = () => {
   };
 
   // ========================================
-  // DETECÇÃO AUTOMÁTICA DE FORMATO
+  // BUSCAR COLUNA POR SIMILARIDADE (ULTRA ROBUSTO)
+  // ========================================
+  const buscarColuna = (row, palavrasChave, nomeAmigavel) => {
+    const colunas = Object.keys(row);
+    
+    for (const palavra of palavrasChave) {
+      const coluna = colunas.find(c => 
+        c.toLowerCase().includes(palavra.toLowerCase())
+      );
+      if (coluna) {
+        addDebug(`   ✓ ${nomeAmigavel}: encontrou "${coluna}"`, '#10b981');
+        return { valor: row[coluna], coluna };
+      }
+    }
+    
+    addDebug(`   ✗ ${nomeAmigavel}: NÃO encontrou (buscou: ${palavrasChave.join(', ')})`, '#ef4444');
+    return { valor: null, coluna: null };
+  };
+
+  // ========================================
+  // DETECÇÃO AUTOMÁTICA DE FORMATO (MELHORADA)
   // ========================================
   const detectarFormato = (row) => {
     const colunas = Object.keys(row);
-    addDebug(`🔍 Analisando colunas: ${colunas.slice(0, 5).join(', ')}...`, '#888');
+    addDebug(`\n🔍 DETECÇÃO DE FORMATO`, '#d2bc8f');
+    addDebug(`📋 Colunas disponíveis: ${colunas.join(', ')}`, '#888');
     
-    // FORMATO 1: Manual (colunas com nomes curtos)
-    const temRenda = colunas.some(c => c.toLowerCase() === 'renda');
-    const temEscolaridade = colunas.some(c => c.toLowerCase() === 'escolaridade');
-    const temProdutoDigital = colunas.some(c => c.toLowerCase().includes('produto digital'));
+    // FORMATO 1: Manual (busca mais flexível)
+    const temRenda = colunas.some(c => 
+      c.toLowerCase().includes('renda') || 
+      c.toLowerCase().includes('income')
+    );
     
-    addDebug(`   Tem 'Renda'? ${temRenda}`, '#888');
-    addDebug(`   Tem 'Escolaridade'? ${temEscolaridade}`, '#888');
-    addDebug(`   Tem 'Produto Digital'? ${temProdutoDigital}`, '#888');
+    const temEscolaridade = colunas.some(c => 
+      c.toLowerCase().includes('escolaridade') || 
+      c.toLowerCase().includes('escolar') ||
+      c.toLowerCase().includes('education')
+    );
     
-    const temColunasManuais = temRenda || temEscolaridade || temProdutoDigital;
+    const temProduto = colunas.some(c => 
+      c.toLowerCase().includes('produto') ||
+      c.toLowerCase().includes('product')
+    );
     
-    // FORMATO 2: Formulário (colunas com perguntas)
-    const temRendaForm = colunas.some(c => c.includes('Qual sua faixa de renda'));
-    const temEscolaridadeForm = colunas.some(c => c.includes('Qual seu grau de escolaridade'));
-    const temProdutoForm = colunas.some(c => c.includes('Você já possui algum produto'));
+    const temTempo = colunas.some(c =>
+      c.toLowerCase().includes('tempo') ||
+      c.toLowerCase().includes('time') ||
+      c.toLowerCase().includes('horas')
+    );
     
-    addDebug(`   Tem pergunta Renda? ${temRendaForm}`, '#888');
-    addDebug(`   Tem pergunta Escolaridade? ${temEscolaridadeForm}`, '#888');
+    addDebug(`\n🔍 Buscando indicadores MANUAL:`, '#888');
+    addDebug(`   Tem coluna Renda? ${temRenda}`, temRenda ? '#10b981' : '#888');
+    addDebug(`   Tem coluna Escolaridade? ${temEscolaridade}`, temEscolaridade ? '#10b981' : '#888');
+    addDebug(`   Tem coluna Produto? ${temProduto}`, temProduto ? '#10b981' : '#888');
+    addDebug(`   Tem coluna Tempo? ${temTempo}`, temTempo ? '#10b981' : '#888');
     
-    const temColunasFormulario = temRendaForm || temEscolaridadeForm || temProdutoForm;
+    const temColunasManuais = temRenda || temEscolaridade || temProduto || temTempo;
     
-    if (temColunasManuais) {
+    // FORMATO 2: Formulário (perguntas completas)
+    const temPerguntaRenda = colunas.some(c => c.includes('Qual sua faixa de renda'));
+    const temPerguntaEscolaridade = colunas.some(c => c.includes('Qual seu grau de escolaridade'));
+    const temPerguntaProduto = colunas.some(c => c.includes('Você já possui algum produto'));
+    
+    addDebug(`\n🔍 Buscando indicadores FORMULÁRIO:`, '#888');
+    addDebug(`   Tem pergunta Renda? ${temPerguntaRenda}`, temPerguntaRenda ? '#10b981' : '#888');
+    addDebug(`   Tem pergunta Escolaridade? ${temPerguntaEscolaridade}`, temPerguntaEscolaridade ? '#10b981' : '#888');
+    
+    const temColunasFormulario = temPerguntaRenda || temPerguntaEscolaridade || temPerguntaProduto;
+    
+    // Decisão
+    if (temColunasManuais && !temColunasFormulario) {
+      addDebug(`\n✅ FORMATO DETECTADO: MANUAL`, '#10b981');
       return 'MANUAL';
     } else if (temColunasFormulario) {
+      addDebug(`\n✅ FORMATO DETECTADO: FORMULÁRIO`, '#10b981');
       return 'FORMULARIO';
     }
     
-    // Tentar detectar pelo valor
-    const primeiroValor = row[colunas[1]]; // Segunda coluna geralmente tem dados
+    // Tentar detectar pelo valor da segunda coluna
+    const primeiroValor = row[colunas[1]];
     if (typeof primeiroValor === 'number' && primeiroValor <= 4) {
-      addDebug(`   Valor numérico detectado: ${primeiroValor}`, '#888');
+      addDebug(`\n✅ FORMATO DETECTADO: MANUAL (por valor numérico: ${primeiroValor})`, '#10b981');
       return 'MANUAL';
     }
     
-    addDebug(`   ⚠️ Detecção inconclusiva, usando FORMULÁRIO como padrão`, '#f59e0b');
-    return 'FORMULARIO'; // Default
+    addDebug(`\n⚠️ FORMATO DETECTADO: FORMULÁRIO (padrão)`, '#f59e0b');
+    return 'FORMULARIO';
   };
 
   // ========================================
@@ -121,45 +166,43 @@ const App = () => {
   };
 
   // ========================================
-  // BUSCAR COLUNA POR SIMILARIDADE
-  // ========================================
-  const buscarColuna = (row, palavrasChave) => {
-    const colunas = Object.keys(row);
-    
-    for (const palavra of palavrasChave) {
-      const coluna = colunas.find(c => 
-        c.toLowerCase().includes(palavra.toLowerCase())
-      );
-      if (coluna) {
-        return row[coluna];
-      }
-    }
-    
-    return null;
-  };
-
-  // ========================================
-  // PROCESSAR FORMATO MANUAL
+  // PROCESSAR FORMATO MANUAL (MELHORADO)
   // ========================================
   const processarManual = (row, index) => {
-    const nome = buscarColuna(row, ['nome', 'name']) || '';
-    const renda = buscarColuna(row, ['renda', 'income']) || 0;
-    const escolaridade = buscarColuna(row, ['escolaridade', 'education', 'escola']) || 0;
-    const produto = buscarColuna(row, ['produto digital', 'produto', 'product']) || 0;
-    const tempo = buscarColuna(row, ['tempo semanal', 'tempo', 'time', 'horas']) || 0;
-    const comportamento = buscarColuna(row, ['comportamento', 'compra', 'behavior']) || 0;
+    if (index === 0) {
+      addDebug(`\n⚙️ PROCESSANDO FORMATO MANUAL:`, '#d2bc8f');
+      addDebug(`📊 Buscando colunas por similaridade...`, '#888');
+    }
+    
+    // Buscar com MÚLTIPLAS palavras-chave e mostrar no LOG
+    const nomeResult = buscarColuna(row, ['nome', 'name', 'aluno'], 'Nome');
+    const rendaResult = buscarColuna(row, ['renda', 'income'], 'Renda');
+    const escolaridadeResult = buscarColuna(row, ['escolaridade', 'escolar', 'education'], 'Escolaridade');
+    const produtoResult = buscarColuna(row, ['produto digital', 'produto d', 'produto', 'product'], 'Produto Digital');
+    const tempoResult = buscarColuna(row, ['tempo semanal', 'tempo se', 'tempo', 'time', 'horas'], 'Tempo Semanal');
+    const comportamentoResult = buscarColuna(row, ['comportamento', 'compra', 'behavior'], 'Comportamento');
+    
+    const nome = nomeResult.valor || '';
+    const renda = rendaResult.valor || 0;
+    const escolaridade = escolaridadeResult.valor || 0;
+    const produto = produtoResult.valor || 0;
+    const tempo = tempoResult.valor || 0;
+    const comportamento = comportamentoResult.valor || 0;
     
     // Debug primeiro lead
     if (index === 0) {
-      addDebug(`📊 Valores brutos encontrados:`, '#10b981');
-      addDebug(`   Nome: "${nome}"`, '#888');
+      addDebug(`\n📊 Valores encontrados no 1º lead:`, '#10b981');
+      addDebug(`   Nome: "${nome}" (tipo: ${typeof nome})`, '#888');
       addDebug(`   Renda: ${renda} (tipo: ${typeof renda})`, '#888');
       addDebug(`   Escolaridade: ${escolaridade} (tipo: ${typeof escolaridade})`, '#888');
       addDebug(`   Produto: ${produto} (tipo: ${typeof produto})`, '#888');
       addDebug(`   Tempo: ${tempo} (tipo: ${typeof tempo})`, '#888');
+      if (comportamento) {
+        addDebug(`   Comportamento: ${comportamento} (tipo: ${typeof comportamento})`, '#888');
+      }
     }
     
-    // Converter para número caso venha como string
+    // Converter para número
     const rendaPts = Number(renda) || 0;
     const escolaridadePts = Number(escolaridade) || 0;
     const produtoPts = Number(produto) || 0;
@@ -168,6 +211,12 @@ const App = () => {
     
     const scoreFinal = rendaPts + escolaridadePts + produtoPts + tempoPts + comportamentoPts;
     const icp = classificarICP(scoreFinal);
+    
+    if (index === 0) {
+      addDebug(`\n✅ CÁLCULO DO 1º LEAD:`, '#10b981');
+      addDebug(`   ${rendaPts} + ${escolaridadePts} + ${produtoPts} + ${tempoPts} + ${comportamentoPts} = ${scoreFinal}`, 'white');
+      addDebug(`   ICP: ${icp}`, '#10b981');
+    }
     
     return {
       nome,
@@ -185,15 +234,25 @@ const App = () => {
   // PROCESSAR FORMATO FORMULÁRIO
   // ========================================
   const processarFormulario = (row, index) => {
-    const nome = buscarColuna(row, ['seu nome completo', 'nome', 'name']) || '';
-    const rendaTexto = buscarColuna(row, ['qual sua faixa de renda', 'renda mensal', 'renda']) || '';
-    const escolaridadeTexto = buscarColuna(row, ['qual seu grau de escolaridade', 'escolaridade']) || '';
-    const produtoTexto = buscarColuna(row, ['você já possui algum produto', 'possui produto', 'produto']) || '';
-    const tempoTexto = buscarColuna(row, ['quanto tempo consegue se dedicar', 'tempo semanal', 'tempo']) || '';
-    
-    // Debug primeiro lead
     if (index === 0) {
-      addDebug(`📊 Respostas brutas encontradas:`, '#10b981');
+      addDebug(`\n⚙️ PROCESSANDO FORMATO FORMULÁRIO:`, '#d2bc8f');
+      addDebug(`📊 Buscando respostas...`, '#888');
+    }
+    
+    const nomeResult = buscarColuna(row, ['seu nome completo', 'nome', 'name'], 'Nome');
+    const rendaResult = buscarColuna(row, ['qual sua faixa de renda', 'renda mensal', 'renda'], 'Renda');
+    const escolaridadeResult = buscarColuna(row, ['qual seu grau de escolaridade', 'escolaridade'], 'Escolaridade');
+    const produtoResult = buscarColuna(row, ['você já possui algum produto', 'possui produto', 'produto'], 'Produto');
+    const tempoResult = buscarColuna(row, ['quanto tempo consegue se dedicar', 'tempo semanal', 'tempo'], 'Tempo');
+    
+    const nome = nomeResult.valor || '';
+    const rendaTexto = rendaResult.valor || '';
+    const escolaridadeTexto = escolaridadeResult.valor || '';
+    const produtoTexto = produtoResult.valor || '';
+    const tempoTexto = tempoResult.valor || '';
+    
+    if (index === 0) {
+      addDebug(`\n📊 Respostas do 1º lead:`, '#10b981');
       addDebug(`   Nome: "${nome}"`, '#888');
       addDebug(`   Renda: "${rendaTexto}"`, '#888');
       addDebug(`   Escolaridade: "${escolaridadeTexto}"`, '#888');
@@ -208,6 +267,15 @@ const App = () => {
     
     const scoreFinal = rendaPts + escolaridadePts + produtoPts + tempoPts;
     const icp = classificarICP(scoreFinal);
+    
+    if (index === 0) {
+      addDebug(`\n✅ CONVERSÃO DO 1º LEAD:`, '#10b981');
+      addDebug(`   Renda: "${rendaTexto}" → ${rendaPts} pts`, 'white');
+      addDebug(`   Escolaridade: "${escolaridadeTexto}" → ${escolaridadePts} pts`, 'white');
+      addDebug(`   Produto: "${produtoTexto}" → ${produtoPts} pts`, 'white');
+      addDebug(`   Tempo: "${tempoTexto}" → ${tempoPts} pts`, 'white');
+      addDebug(`   TOTAL: ${scoreFinal} → ${icp}`, '#10b981');
+    }
     
     return {
       nome,
@@ -232,11 +300,11 @@ const App = () => {
     try {
       setLoading(true);
       setDebugLog([]);
-      addDebug('🚀 Iniciando processamento...', 'white');
+      addDebug('🚀 INICIANDO PROCESSAMENTO...', '#d2bc8f');
       
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const sheetName = workbook.SheetNames[0];
-      addDebug(`📄 Planilha encontrada: ${sheetName}`, 'white');
+      addDebug(`📄 Planilha: ${sheetName}`, 'white');
       
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
@@ -248,16 +316,9 @@ const App = () => {
       }
       
       // DETECÇÃO AUTOMÁTICA
-      addDebug(`\n🔍 INICIANDO DETECÇÃO DE FORMATO...`, '#d2bc8f');
       const formato = detectarFormato(jsonData[0]);
-      addDebug(`\n✅ FORMATO DETECTADO: ${formato}`, '#10b981');
       
-      const colunas = Object.keys(jsonData[0]);
-      addDebug(`📋 Total de colunas: ${colunas.length}`, 'white');
-      addDebug(`🔍 Primeiras 5 colunas: ${colunas.slice(0, 5).join(', ')}`, '#888');
-      
-      // Processar de acordo com o formato
-      addDebug(`\n⚙️ PROCESSANDO LEADS...`, '#d2bc8f');
+      // Processar leads
       const processedLeads = jsonData.map((row, index) => {
         let lead;
         
@@ -267,28 +328,15 @@ const App = () => {
           lead = processarFormulario(row, index);
         }
         
-        // Debug do primeiro lead
-        if (index === 0) {
-          addDebug(`\n✅ EXEMPLO DO 1º LEAD:`, '#10b981');
-          addDebug(`Nome: ${lead.nome}`, 'white');
-          addDebug(`Renda: ${lead.renda} pts`, 'white');
-          addDebug(`Escolaridade: ${lead.escolaridade} pts`, 'white');
-          addDebug(`Produto: ${lead.produtoDigital} pts`, 'white');
-          addDebug(`Tempo: ${lead.tempoSemanal} pts`, 'white');
-          if (lead.comportamentoCompra > 0) {
-            addDebug(`Comportamento: ${lead.comportamentoCompra} pts`, 'white');
-          }
-          addDebug(`SCORE FINAL: ${lead.scoreFinal} → ${lead.icp}`, '#10b981');
-        }
-        
         return lead;
       });
       
       const leadsCompletos = processedLeads.filter(lead => lead.nome && lead.nome.trim() !== '');
+      
       addDebug(`\n✅ Leads válidos: ${leadsCompletos.length}`, '#10b981');
       
       if (leadsCompletos.length === 0) {
-        throw new Error('Nenhum lead válido encontrado! Verifique se a coluna de nome está preenchida.');
+        throw new Error('Nenhum lead válido! Verifique se a coluna de nome existe.');
       }
       
       const processedData = {
@@ -314,7 +362,7 @@ const App = () => {
       
       addDebug(`\n📊 DISTRIBUIÇÃO POR ICP:`, '#d2bc8f');
       processedData.icpDistribution.forEach(item => {
-        addDebug(`${item.name}: ${item.value} leads (${item.percentage}%)`, 'white');
+        addDebug(`   ${item.name}: ${item.value} leads (${item.percentage}%)`, 'white');
       });
       
       // Score groups
@@ -350,17 +398,17 @@ const App = () => {
         }))
         .sort((a, b) => a.score - b.score);
       
-      addDebug(`\n🎉 PROCESSAMENTO CONCLUÍDO!`, '#10b981');
-      addDebug(`Formato usado: ${formato}`, 'white');
-      addDebug(`Score Total: ${processedData.scoreTotal}`, 'white');
-      addDebug(`Score Médio: ${processedData.scoreMedia.toFixed(1)}`, 'white');
+      addDebug(`\n🎉 CONCLUÍDO!`, '#10b981');
+      addDebug(`   Formato: ${formato}`, 'white');
+      addDebug(`   Score Total: ${processedData.scoreTotal}`, 'white');
+      addDebug(`   Score Médio: ${processedData.scoreMedia.toFixed(1)}`, 'white');
       
       setData(processedData);
       setLoading(false);
     } catch (error) {
       console.error('ERRO:', error);
       addDebug(`\n❌ ERRO: ${error.message}`, '#ef4444');
-      alert(`Erro ao processar: ${error.message}`);
+      alert(`Erro: ${error.message}`);
       setLoading(false);
     }
   }, []);
@@ -393,7 +441,7 @@ const App = () => {
 
   const handleFile = useCallback((file) => {
     setFileName(file.name);
-    addDebug(`📁 Arquivo selecionado: ${file.name}`, 'white');
+    addDebug(`📁 Arquivo: ${file.name}`, 'white');
     const reader = new FileReader();
     reader.onload = (e) => {
       processExcelData(e.target.result);
@@ -440,7 +488,7 @@ const App = () => {
           fontFamily: 'monospace',
           fontSize: '0.85rem'
         }}>
-          <h4 style={{ color: '#d2bc8f', marginBottom: '0.5rem' }}>📋 Log de Processamento (Detalhado):</h4>
+          <h4 style={{ color: '#d2bc8f', marginBottom: '0.5rem' }}>📋 Log Detalhado:</h4>
           {debugLog.map((log, i) => (
             <div key={i} style={{ color: log.color, marginBottom: '0.25rem' }}>
               {log.msg}
@@ -454,7 +502,7 @@ const App = () => {
         <div className="modal-overlay" onClick={() => setShowLegend(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>📊 Critérios de Pontuação (Score)</h2>
+              <h2>📊 Critérios de Pontuação</h2>
               <button className="modal-close" onClick={() => setShowLegend(false)}>
                 <X size={24} />
               </button>
@@ -463,7 +511,7 @@ const App = () => {
             <div className="modal-body">
               <div className="criteria-grid">
                 <div className="criteria-card">
-                  <h3>💰 Renda (Renda_pts)</h3>
+                  <h3>💰 Renda</h3>
                   <table className="criteria-table">
                     <tbody>
                       <tr><td>Mais de R$ 20.000</td><td className="score-badge">4</td></tr>
@@ -476,36 +524,35 @@ const App = () => {
                 </div>
 
                 <div className="criteria-card">
-                  <h3>🎓 Escolaridade (Escolaridade_pts)</h3>
+                  <h3>🎓 Escolaridade</h3>
                   <table className="criteria-table">
                     <tbody>
-                      <tr><td>Mestrado / Doutorado / Pós</td><td className="score-badge">3</td></tr>
-                      <tr><td>Superior completo/cursando</td><td className="score-badge">2</td></tr>
-                      <tr><td>Ensino médio/fundamental</td><td className="score-badge">1</td></tr>
+                      <tr><td>Mestrado/Doutorado/Pós</td><td className="score-badge">3</td></tr>
+                      <tr><td>Superior completo</td><td className="score-badge">2</td></tr>
+                      <tr><td>Ensino médio</td><td className="score-badge">1</td></tr>
                     </tbody>
                   </table>
                 </div>
 
                 <div className="criteria-card">
-                  <h3>💻 Produto Digital (ProdutoDigital_pts)</h3>
+                  <h3>💻 Produto Digital</h3>
                   <table className="criteria-table">
                     <tbody>
                       <tr><td>Já vendo, mas quero escalar</td><td className="score-badge">3</td></tr>
-                      <tr><td>Preciso melhorar e vender mais</td><td className="score-badge">2</td></tr>
-                      <tr><td>Tenho ideia, mas não sei executar</td><td className="score-badge">1</td></tr>
+                      <tr><td>Preciso melhorar</td><td className="score-badge">2</td></tr>
+                      <tr><td>Tenho ideia</td><td className="score-badge">1</td></tr>
                       <tr><td>Vou criar do zero</td><td className="score-badge">0</td></tr>
                     </tbody>
                   </table>
                 </div>
 
                 <div className="criteria-card">
-                  <h3>⏰ Tempo Semanal (Tempo_pts)</h3>
+                  <h3>⏰ Tempo Semanal</h3>
                   <table className="criteria-table">
                     <tbody>
-                      <tr><td>11h a 20h por semana</td><td className="score-badge">3</td></tr>
-                      <tr><td>6h a 10h por semana</td><td className="score-badge">2</td></tr>
-                      <tr><td>2h a 5h por semana</td><td className="score-badge">1</td></tr>
-                      <tr><td>Menos de 2h por semana</td><td className="score-badge">1</td></tr>
+                      <tr><td>11h a 20h</td><td className="score-badge">3</td></tr>
+                      <tr><td>6h a 10h</td><td className="score-badge">2</td></tr>
+                      <tr><td>2h a 5h</td><td className="score-badge">1</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -513,17 +560,17 @@ const App = () => {
                 <div className="criteria-card full-width">
                   <h3>ℹ️ Detecção Automática</h3>
                   <p style={{color: '#888', fontSize: '0.9rem', lineHeight: '1.6'}}>
-                    Este dashboard detecta <strong>automaticamente</strong> qual formato sua planilha está:
-                    <br/>• <strong>Formato Manual:</strong> colunas com pontos já calculados (Renda=4, Escolaridade=3...)
-                    <br/>• <strong>Formato Formulário:</strong> colunas com respostas em texto ("Mais de 20.000 reais"...)
+                    Este dashboard detecta <strong>automaticamente</strong> qual formato:
+                    <br/>• <strong>Manual:</strong> colunas com pontos (Renda=4...)
+                    <br/>• <strong>Formulário:</strong> respostas em texto
                     <br/><br/>
-                    O LOG acima mostra em detalhes como foi feita a detecção e o processamento dos seus dados.
+                    <strong>Aceita nomes abreviados:</strong> "Produto D", "Tempo se", etc.
                   </p>
                 </div>
               </div>
 
               <div className="classification-section">
-                <h2>🎯 Classificação Final ICP (por ScoreFinal)</h2>
+                <h2>🎯 Classificação ICP</h2>
                 <div className="classification-grid">
                   <div className="classification-item elite">
                     <div className="class-badge">ICP 1 ELITE</div>
@@ -534,12 +581,12 @@ const App = () => {
                     <div className="class-score">Score ≥ 10</div>
                   </div>
                   <div className="classification-item regular">
-                    <div className="class-badge">ICP 2 REGULAR</div>
-                    <div className="class-score">Score entre 6 e 9</div>
+                    <div className="class-badge">ICP 2</div>
+                    <div className="class-score">Score 6-9</div>
                   </div>
                   <div className="classification-item baixo">
-                    <div className="class-badge">ICP 3 BAIXO</div>
-                    <div className="class-score">Score entre 1 e 5</div>
+                    <div className="class-badge">ICP 3</div>
+                    <div className="class-score">Score 1-5</div>
                   </div>
                 </div>
               </div>
@@ -572,7 +619,7 @@ const App = () => {
               <h3>Arraste sua planilha aqui</h3>
               <p>ou clique para selecionar</p>
               <p style={{ fontSize: '0.85rem', marginTop: '0.5rem', opacity: 0.7 }}>
-                ✨ Aceita QUALQUER formato: Pontos ou Respostas!
+                ✨ Aceita pontos OU respostas!
               </p>
             </div>
             {fileName && (
