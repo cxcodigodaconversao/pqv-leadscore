@@ -19,6 +19,58 @@ const App = () => {
     'ICP 3': '#ef4444'
   };
 
+  // FUNÇÃO DE CONVERSÃO: Renda → Pontos
+  const convertRenda = (renda) => {
+    if (!renda) return 0;
+    const rendaLower = renda.toLowerCase();
+    
+    if (rendaLower.includes('mais de 20')) return 4;
+    if (rendaLower.includes('10.001') || rendaLower.includes('20.000')) return 3;
+    if (rendaLower.includes('5001') || rendaLower.includes('10.000')) return 2;
+    if (rendaLower.includes('3001') || rendaLower.includes('5000')) return 1;
+    if (rendaLower.includes('1501') || rendaLower.includes('3000')) return 1;
+    return 0; // Até 1500 ou não possui
+  };
+
+  // FUNÇÃO DE CONVERSÃO: Escolaridade → Pontos
+  const convertEscolaridade = (escolaridade) => {
+    if (!escolaridade) return 1;
+    const escLower = escolaridade.toLowerCase();
+    
+    if (escLower.includes('mestrado') || escLower.includes('doutorado') || escLower.includes('pós')) return 3;
+    if (escLower.includes('superior')) return 2;
+    return 1; // Ensino médio ou fundamental
+  };
+
+  // FUNÇÃO DE CONVERSÃO: Produto Digital → Pontos
+  const convertProdutoDigital = (produto) => {
+    if (!produto) return 0;
+    const prodLower = produto.toLowerCase();
+    
+    if (prodLower.includes('já vendo') || prodLower.includes('escalar')) return 3;
+    if (prodLower.includes('mas preciso melhorar') || prodLower.includes('vender mais')) return 2;
+    if (prodLower.includes('ideia') || prodLower.includes('não sei como')) return 1;
+    return 0; // Não possui ou vai criar do zero
+  };
+
+  // FUNÇÃO DE CONVERSÃO: Tempo Semanal → Pontos
+  const convertTempoSemanal = (tempo) => {
+    if (!tempo) return 1;
+    const tempoLower = tempo.toLowerCase();
+    
+    if (tempoLower.includes('11') || tempoLower.includes('20')) return 3;
+    if (tempoLower.includes('6') || tempoLower.includes('10')) return 2;
+    return 1; // 2-5h ou menos de 2h
+  };
+
+  // FUNÇÃO DE CLASSIFICAÇÃO ICP
+  const classificarICP = (scoreFinal) => {
+    if (scoreFinal >= 13) return 'ICP 1 ELITE';
+    if (scoreFinal >= 10) return 'ICP 1 BLACK';
+    if (scoreFinal >= 6) return 'ICP 2';
+    return 'ICP 3';
+  };
+
   const processExcelData = useCallback((arrayBuffer) => {
     try {
       setLoading(true);
@@ -27,21 +79,56 @@ const App = () => {
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-      // Processar dados
+      console.log('Dados brutos:', jsonData); // Debug
+
+      // Processar dados com conversão automática
+      const processedLeads = jsonData.map(row => {
+        // Extrair valores das colunas do formulário
+        const nome = row['Seu nome completo'] || '';
+        const renda = row['Qual sua faixa de renda mensal? (suas informações são confidenciais)'] || '';
+        const escolaridade = row['Qual seu grau de escolaridade?'] || '';
+        const produto = row['Você já possui algum produto?'] || '';
+        const tempo = row['Quanto tempo consegue se dedicar por semana para seu projeto no digital?'] || '';
+
+        // Converter para pontuações
+        const rendaPts = convertRenda(renda);
+        const escolaridadePts = convertEscolaridade(escolaridade);
+        const produtoPts = convertProdutoDigital(produto);
+        const tempoPts = convertTempoSemanal(tempo);
+        
+        // Calcular score final (sem comportamento de compra pois não está no form)
+        const scoreFinal = rendaPts + escolaridadePts + produtoPts + tempoPts;
+        
+        // Classificar ICP
+        const icp = classificarICP(scoreFinal);
+
+        return {
+          nome,
+          renda: rendaPts,
+          escolaridade: escolaridadePts,
+          produtoDigital: produtoPts,
+          tempoSemanal: tempoPts,
+          comportamentoCompra: 0, // Não disponível no formulário
+          scoreFinal,
+          icp,
+          // Dados originais para referência
+          rendaOriginal: renda,
+          escolaridadeOriginal: escolaridade,
+          produtoOriginal: produto,
+          tempoOriginal: tempo
+        };
+      });
+
+      // Filtrar apenas respostas completas (completed)
+      const leadsCompletos = processedLeads.filter(lead => lead.nome && lead.nome.trim() !== '');
+
       const processedData = {
-        leads: jsonData.map(row => ({
-          nome: row.Nome || '',
-          renda: row.Renda || 0,
-          escolaridade: row.Escolaridade || 0,
-          produtoDigital: row['Produto Digital'] || 0,
-          tempoSemanal: row['Tempo semanal'] || 0,
-          comportamentoCompra: row['Comportamento de Compra'] || 0,
-          scoreFinal: row.ScoreFinal || 0,
-          icp: row.ICP || ''
-        })),
-        totalLeads: jsonData.length,
-        scoreTotal: jsonData.reduce((sum, row) => sum + (row.ScoreFinal || 0), 0),
-        scoreMedia: jsonData.length > 0 ? jsonData.reduce((sum, row) => sum + (row.ScoreFinal || 0), 0) / jsonData.length : 0
+        leads: leadsCompletos,
+        totalLeads: leadsCompletos.length,
+        scoreTotal: leadsCompletos.reduce((sum, lead) => sum + lead.scoreFinal, 0),
+        scoreMedia: leadsCompletos.length > 0 
+          ? leadsCompletos.reduce((sum, lead) => sum + lead.scoreFinal, 0) / leadsCompletos.length 
+          : 0
       };
 
       // Calcular distribuição por ICP
@@ -88,6 +175,8 @@ const App = () => {
           count
         }))
         .sort((a, b) => a.score - b.score);
+
+      console.log('Dados processados:', processedData); // Debug
 
       setData(processedData);
       setLoading(false);
@@ -176,10 +265,11 @@ const App = () => {
                   <h3>💰 Renda (Renda_pts)</h3>
                   <table className="criteria-table">
                     <tbody>
-                      <tr><td>+20k</td><td className="score-badge">4</td></tr>
-                      <tr><td>10k–20k</td><td className="score-badge">3</td></tr>
-                      <tr><td>5k–10,5k</td><td className="score-badge">2</td></tr>
-                      <tr><td>3k–5k</td><td className="score-badge">1</td></tr>
+                      <tr><td>Mais de R$ 20.000</td><td className="score-badge">4</td></tr>
+                      <tr><td>R$ 10.001 - 20.000</td><td className="score-badge">3</td></tr>
+                      <tr><td>R$ 5.001 - 10.000</td><td className="score-badge">2</td></tr>
+                      <tr><td>R$ 1.501 - 5.000</td><td className="score-badge">1</td></tr>
+                      <tr><td>Até R$ 1.500</td><td className="score-badge">0</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -189,9 +279,9 @@ const App = () => {
                   <h3>🎓 Escolaridade (Escolaridade_pts)</h3>
                   <table className="criteria-table">
                     <tbody>
-                      <tr><td>Pós / Mestrado / Doutorado</td><td className="score-badge">3</td></tr>
-                      <tr><td>Superior</td><td className="score-badge">2</td></tr>
-                      <tr><td>Ensino Médio</td><td className="score-badge">1</td></tr>
+                      <tr><td>Mestrado / Doutorado / Pós</td><td className="score-badge">3</td></tr>
+                      <tr><td>Superior completo/cursando</td><td className="score-badge">2</td></tr>
+                      <tr><td>Ensino médio/fundamental</td><td className="score-badge">1</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -201,10 +291,10 @@ const App = () => {
                   <h3>💻 Produto Digital (ProdutoDigital_pts)</h3>
                   <table className="criteria-table">
                     <tbody>
-                      <tr><td>Já vende bem</td><td className="score-badge">3</td></tr>
-                      <tr><td>Tem, mas vende pouco</td><td className="score-badge">2</td></tr>
-                      <tr><td>Tentou / tem ideia</td><td className="score-badge">1</td></tr>
-                      <tr><td>Não tem</td><td className="score-badge">0</td></tr>
+                      <tr><td>Já vendo, mas quero escalar</td><td className="score-badge">3</td></tr>
+                      <tr><td>Preciso melhorar e vender mais</td><td className="score-badge">2</td></tr>
+                      <tr><td>Tenho ideia, mas não sei executar</td><td className="score-badge">1</td></tr>
+                      <tr><td>Vou criar do zero</td><td className="score-badge">0</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -214,25 +304,21 @@ const App = () => {
                   <h3>⏰ Tempo Semanal (Tempo_pts)</h3>
                   <table className="criteria-table">
                     <tbody>
-                      <tr><td>+20h</td><td className="score-badge">3</td></tr>
-                      <tr><td>11–20h</td><td className="score-badge">3</td></tr>
-                      <tr><td>6–10h</td><td className="score-badge">2</td></tr>
-                      <tr><td>2–5h</td><td className="score-badge">1</td></tr>
+                      <tr><td>11h a 20h por semana</td><td className="score-badge">3</td></tr>
+                      <tr><td>6h a 10h por semana</td><td className="score-badge">2</td></tr>
+                      <tr><td>2h a 5h por semana</td><td className="score-badge">1</td></tr>
+                      <tr><td>Menos de 2h por semana</td><td className="score-badge">1</td></tr>
                     </tbody>
                   </table>
                 </div>
 
-                {/* Liquidez / Comportamento de Compra */}
+                {/* Nota sobre Comportamento */}
                 <div className="criteria-card full-width">
-                  <h3>💳 Liquidez / Comportamento de Compra (Liquidez_pts)</h3>
-                  <table className="criteria-table">
-                    <tbody>
-                      <tr><td>Pagou à vista / PIX alto / entrada alta</td><td className="score-badge">3</td></tr>
-                      <tr><td>Cartão com limite (limite comprometido)</td><td className="score-badge">2</td></tr>
-                      <tr><td>Parcelamento recorrente / parcelado com entrada</td><td className="score-badge">1</td></tr>
-                      <tr><td>Sem dado / não pago / saiu</td><td className="score-badge">0</td></tr>
-                    </tbody>
-                  </table>
+                  <h3>ℹ️ Observação</h3>
+                  <p style={{color: '#888', fontSize: '0.9rem', lineHeight: '1.6'}}>
+                    O critério <strong>"Comportamento de Compra"</strong> não está disponível neste formulário, 
+                    por isso não é incluído no cálculo. O score máximo possível é <strong>13 pontos</strong> (ao invés de 16).
+                  </p>
                 </div>
               </div>
 
@@ -256,10 +342,6 @@ const App = () => {
                     <div className="class-badge">ICP 3 BAIXO</div>
                     <div className="class-score">Score entre 1 e 5</div>
                   </div>
-                  <div className="classification-item sem-dados">
-                    <div className="class-badge">ICP 4 (sem dados)</div>
-                    <div className="class-score">Score = 0 ou sem resposta</div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -279,7 +361,7 @@ const App = () => {
           <input
             id="fileInput"
             type="file"
-            accept=".xlsx,.xls"
+            accept=".xlsx,.xls,.csv"
             onChange={handleFileInput}
             style={{ display: 'none' }}
           />
@@ -291,7 +373,7 @@ const App = () => {
               <h3>Arraste sua planilha aqui</h3>
               <p>ou clique para selecionar</p>
               <p style={{ fontSize: '0.85rem', marginTop: '0.5rem', opacity: 0.7 }}>
-                Formatos aceitos: .xlsx, .xls
+                Formatos aceitos: .xlsx, .xls, .csv (exportado do formulário)
               </p>
             </div>
             {fileName && (
@@ -307,8 +389,8 @@ const App = () => {
       {loading && (
         <div className="loading">
           <div className="loading-spinner"></div>
-          <h3 style={{ color: 'white' }}>Processando sua planilha...</h3>
-          <p>Aguarde enquanto analisamos seus dados</p>
+          <h3 style={{ color: 'white' }}>Processando suas respostas...</h3>
+          <p>Convertendo automaticamente para pontuação ICP</p>
         </div>
       )}
 
@@ -426,7 +508,6 @@ const App = () => {
                     <th>Escolaridade</th>
                     <th>Produto Digital</th>
                     <th>Tempo Semanal</th>
-                    <th>Comportamento</th>
                     <th>Score Final</th>
                     <th>ICP</th>
                   </tr>
@@ -435,11 +516,10 @@ const App = () => {
                   {data.leads.sort((a, b) => b.scoreFinal - a.scoreFinal).map((lead, index) => (
                     <tr key={index}>
                       <td style={{ fontWeight: 600 }}>{lead.nome}</td>
-                      <td>{lead.renda}</td>
-                      <td>{lead.escolaridade}</td>
-                      <td>{lead.produtoDigital}</td>
-                      <td>{lead.tempoSemanal}</td>
-                      <td>{lead.comportamentoCompra}</td>
+                      <td>{lead.renda} pts</td>
+                      <td>{lead.escolaridade} pts</td>
+                      <td>{lead.produtoDigital} pts</td>
+                      <td>{lead.tempoSemanal} pts</td>
                       <td className="score-cell">{lead.scoreFinal}</td>
                       <td>
                         <span className={`icp-badge ${
