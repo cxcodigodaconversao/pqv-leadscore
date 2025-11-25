@@ -12,9 +12,9 @@ const App = () => {
   const [showLegend, setShowLegend] = useState(false);
   const [debugLog, setDebugLog] = useState([]);
 
-  const addDebug = (msg) => {
+  const addDebug = (msg, color = 'white') => {
     console.log(msg);
-    setDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
+    setDebugLog(prev => [...prev, { msg: `${new Date().toLocaleTimeString()}: ${msg}`, color }]);
   };
 
   const ICP_COLORS = {
@@ -30,18 +30,28 @@ const App = () => {
   // ========================================
   const detectarFormato = (row) => {
     const colunas = Object.keys(row);
+    addDebug(`🔍 Analisando colunas: ${colunas.slice(0, 5).join(', ')}...`, '#888');
     
     // FORMATO 1: Manual (colunas com nomes curtos)
-    const temColunasManuais = 
-      colunas.some(c => c.toLowerCase() === 'renda') ||
-      colunas.some(c => c.toLowerCase() === 'escolaridade') ||
-      colunas.some(c => c.toLowerCase().includes('produto digital'));
+    const temRenda = colunas.some(c => c.toLowerCase() === 'renda');
+    const temEscolaridade = colunas.some(c => c.toLowerCase() === 'escolaridade');
+    const temProdutoDigital = colunas.some(c => c.toLowerCase().includes('produto digital'));
+    
+    addDebug(`   Tem 'Renda'? ${temRenda}`, '#888');
+    addDebug(`   Tem 'Escolaridade'? ${temEscolaridade}`, '#888');
+    addDebug(`   Tem 'Produto Digital'? ${temProdutoDigital}`, '#888');
+    
+    const temColunasManuais = temRenda || temEscolaridade || temProdutoDigital;
     
     // FORMATO 2: Formulário (colunas com perguntas)
-    const temColunasFormulario =
-      colunas.some(c => c.includes('Qual sua faixa de renda')) ||
-      colunas.some(c => c.includes('Qual seu grau de escolaridade')) ||
-      colunas.some(c => c.includes('Você já possui algum produto'));
+    const temRendaForm = colunas.some(c => c.includes('Qual sua faixa de renda'));
+    const temEscolaridadeForm = colunas.some(c => c.includes('Qual seu grau de escolaridade'));
+    const temProdutoForm = colunas.some(c => c.includes('Você já possui algum produto'));
+    
+    addDebug(`   Tem pergunta Renda? ${temRendaForm}`, '#888');
+    addDebug(`   Tem pergunta Escolaridade? ${temEscolaridadeForm}`, '#888');
+    
+    const temColunasFormulario = temRendaForm || temEscolaridadeForm || temProdutoForm;
     
     if (temColunasManuais) {
       return 'MANUAL';
@@ -52,9 +62,11 @@ const App = () => {
     // Tentar detectar pelo valor
     const primeiroValor = row[colunas[1]]; // Segunda coluna geralmente tem dados
     if (typeof primeiroValor === 'number' && primeiroValor <= 4) {
+      addDebug(`   Valor numérico detectado: ${primeiroValor}`, '#888');
       return 'MANUAL';
     }
     
+    addDebug(`   ⚠️ Detecção inconclusiva, usando FORMULÁRIO como padrão`, '#f59e0b');
     return 'FORMULARIO'; // Default
   };
 
@@ -118,7 +130,9 @@ const App = () => {
       const coluna = colunas.find(c => 
         c.toLowerCase().includes(palavra.toLowerCase())
       );
-      if (coluna) return row[coluna];
+      if (coluna) {
+        return row[coluna];
+      }
     }
     
     return null;
@@ -127,13 +141,23 @@ const App = () => {
   // ========================================
   // PROCESSAR FORMATO MANUAL
   // ========================================
-  const processarManual = (row) => {
+  const processarManual = (row, index) => {
     const nome = buscarColuna(row, ['nome', 'name']) || '';
     const renda = buscarColuna(row, ['renda', 'income']) || 0;
     const escolaridade = buscarColuna(row, ['escolaridade', 'education', 'escola']) || 0;
     const produto = buscarColuna(row, ['produto digital', 'produto', 'product']) || 0;
     const tempo = buscarColuna(row, ['tempo semanal', 'tempo', 'time', 'horas']) || 0;
     const comportamento = buscarColuna(row, ['comportamento', 'compra', 'behavior']) || 0;
+    
+    // Debug primeiro lead
+    if (index === 0) {
+      addDebug(`📊 Valores brutos encontrados:`, '#10b981');
+      addDebug(`   Nome: "${nome}"`, '#888');
+      addDebug(`   Renda: ${renda} (tipo: ${typeof renda})`, '#888');
+      addDebug(`   Escolaridade: ${escolaridade} (tipo: ${typeof escolaridade})`, '#888');
+      addDebug(`   Produto: ${produto} (tipo: ${typeof produto})`, '#888');
+      addDebug(`   Tempo: ${tempo} (tipo: ${typeof tempo})`, '#888');
+    }
     
     // Converter para número caso venha como string
     const rendaPts = Number(renda) || 0;
@@ -160,12 +184,22 @@ const App = () => {
   // ========================================
   // PROCESSAR FORMATO FORMULÁRIO
   // ========================================
-  const processarFormulario = (row) => {
+  const processarFormulario = (row, index) => {
     const nome = buscarColuna(row, ['seu nome completo', 'nome', 'name']) || '';
     const rendaTexto = buscarColuna(row, ['qual sua faixa de renda', 'renda mensal', 'renda']) || '';
     const escolaridadeTexto = buscarColuna(row, ['qual seu grau de escolaridade', 'escolaridade']) || '';
     const produtoTexto = buscarColuna(row, ['você já possui algum produto', 'possui produto', 'produto']) || '';
     const tempoTexto = buscarColuna(row, ['quanto tempo consegue se dedicar', 'tempo semanal', 'tempo']) || '';
+    
+    // Debug primeiro lead
+    if (index === 0) {
+      addDebug(`📊 Respostas brutas encontradas:`, '#10b981');
+      addDebug(`   Nome: "${nome}"`, '#888');
+      addDebug(`   Renda: "${rendaTexto}"`, '#888');
+      addDebug(`   Escolaridade: "${escolaridadeTexto}"`, '#888');
+      addDebug(`   Produto: "${produtoTexto}"`, '#888');
+      addDebug(`   Tempo: "${tempoTexto}"`, '#888');
+    }
     
     const rendaPts = convertRenda(rendaTexto);
     const escolaridadePts = convertEscolaridade(escolaridadeTexto);
@@ -198,58 +232,64 @@ const App = () => {
     try {
       setLoading(true);
       setDebugLog([]);
-      addDebug('🚀 Iniciando processamento...');
+      addDebug('🚀 Iniciando processamento...', 'white');
       
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const sheetName = workbook.SheetNames[0];
-      addDebug(`📄 Planilha encontrada: ${sheetName}`);
+      addDebug(`📄 Planilha encontrada: ${sheetName}`, 'white');
       
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
       
-      addDebug(`📊 Total de linhas: ${jsonData.length}`);
+      addDebug(`📊 Total de linhas: ${jsonData.length}`, 'white');
       
       if (jsonData.length === 0) {
         throw new Error('Planilha vazia!');
       }
       
       // DETECÇÃO AUTOMÁTICA
+      addDebug(`\n🔍 INICIANDO DETECÇÃO DE FORMATO...`, '#d2bc8f');
       const formato = detectarFormato(jsonData[0]);
-      addDebug(`\n🔍 FORMATO DETECTADO: ${formato}`);
+      addDebug(`\n✅ FORMATO DETECTADO: ${formato}`, '#10b981');
       
       const colunas = Object.keys(jsonData[0]);
-      addDebug(`📋 Colunas encontradas: ${colunas.length}`);
-      addDebug(`🔍 Primeiras colunas: ${colunas.slice(0, 3).join(', ')}...`);
+      addDebug(`📋 Total de colunas: ${colunas.length}`, 'white');
+      addDebug(`🔍 Primeiras 5 colunas: ${colunas.slice(0, 5).join(', ')}`, '#888');
       
       // Processar de acordo com o formato
+      addDebug(`\n⚙️ PROCESSANDO LEADS...`, '#d2bc8f');
       const processedLeads = jsonData.map((row, index) => {
         let lead;
         
         if (formato === 'MANUAL') {
-          lead = processarManual(row);
+          lead = processarManual(row, index);
         } else {
-          lead = processarFormulario(row);
+          lead = processarFormulario(row, index);
         }
         
         // Debug do primeiro lead
         if (index === 0) {
-          addDebug(`\n✅ EXEMPLO DO 1º LEAD:`);
-          addDebug(`Nome: ${lead.nome}`);
-          addDebug(`Renda: ${lead.renda} pts`);
-          addDebug(`Escolaridade: ${lead.escolaridade} pts`);
-          addDebug(`Produto: ${lead.produtoDigital} pts`);
-          addDebug(`Tempo: ${lead.tempoSemanal} pts`);
+          addDebug(`\n✅ EXEMPLO DO 1º LEAD:`, '#10b981');
+          addDebug(`Nome: ${lead.nome}`, 'white');
+          addDebug(`Renda: ${lead.renda} pts`, 'white');
+          addDebug(`Escolaridade: ${lead.escolaridade} pts`, 'white');
+          addDebug(`Produto: ${lead.produtoDigital} pts`, 'white');
+          addDebug(`Tempo: ${lead.tempoSemanal} pts`, 'white');
           if (lead.comportamentoCompra > 0) {
-            addDebug(`Comportamento: ${lead.comportamentoCompra} pts`);
+            addDebug(`Comportamento: ${lead.comportamentoCompra} pts`, 'white');
           }
-          addDebug(`SCORE: ${lead.scoreFinal} → ${lead.icp}`);
+          addDebug(`SCORE FINAL: ${lead.scoreFinal} → ${lead.icp}`, '#10b981');
         }
         
         return lead;
       });
       
       const leadsCompletos = processedLeads.filter(lead => lead.nome && lead.nome.trim() !== '');
-      addDebug(`\n✅ Leads válidos: ${leadsCompletos.length}`);
+      addDebug(`\n✅ Leads válidos: ${leadsCompletos.length}`, '#10b981');
+      
+      if (leadsCompletos.length === 0) {
+        throw new Error('Nenhum lead válido encontrado! Verifique se a coluna de nome está preenchida.');
+      }
       
       const processedData = {
         leads: leadsCompletos,
@@ -272,9 +312,9 @@ const App = () => {
         percentage: ((value / processedData.totalLeads) * 100).toFixed(1)
       }));
       
-      addDebug(`\n📊 DISTRIBUIÇÃO POR ICP:`);
+      addDebug(`\n📊 DISTRIBUIÇÃO POR ICP:`, '#d2bc8f');
       processedData.icpDistribution.forEach(item => {
-        addDebug(`${item.name}: ${item.value} (${item.percentage}%)`);
+        addDebug(`${item.name}: ${item.value} leads (${item.percentage}%)`, 'white');
       });
       
       // Score groups
@@ -310,16 +350,16 @@ const App = () => {
         }))
         .sort((a, b) => a.score - b.score);
       
-      addDebug(`\n🎉 PROCESSAMENTO CONCLUÍDO!`);
-      addDebug(`Formato usado: ${formato}`);
-      addDebug(`Score Total: ${processedData.scoreTotal}`);
-      addDebug(`Score Médio: ${processedData.scoreMedia.toFixed(1)}`);
+      addDebug(`\n🎉 PROCESSAMENTO CONCLUÍDO!`, '#10b981');
+      addDebug(`Formato usado: ${formato}`, 'white');
+      addDebug(`Score Total: ${processedData.scoreTotal}`, 'white');
+      addDebug(`Score Médio: ${processedData.scoreMedia.toFixed(1)}`, 'white');
       
       setData(processedData);
       setLoading(false);
     } catch (error) {
       console.error('ERRO:', error);
-      addDebug(`\n❌ ERRO: ${error.message}`);
+      addDebug(`\n❌ ERRO: ${error.message}`, '#ef4444');
       alert(`Erro ao processar: ${error.message}`);
       setLoading(false);
     }
@@ -353,7 +393,7 @@ const App = () => {
 
   const handleFile = useCallback((file) => {
     setFileName(file.name);
-    addDebug(`📁 Arquivo selecionado: ${file.name}`);
+    addDebug(`📁 Arquivo selecionado: ${file.name}`, 'white');
     const reader = new FileReader();
     reader.onload = (e) => {
       processExcelData(e.target.result);
@@ -394,17 +434,16 @@ const App = () => {
           borderRadius: '12px',
           padding: '1rem',
           margin: '2rem auto',
-          maxWidth: '800px',
-          maxHeight: '300px',
+          maxWidth: '900px',
+          maxHeight: '400px',
           overflow: 'auto',
           fontFamily: 'monospace',
-          fontSize: '0.85rem',
-          color: '#d2bc8f'
+          fontSize: '0.85rem'
         }}>
-          <h4 style={{ color: '#d2bc8f', marginBottom: '0.5rem' }}>📋 Log de Processamento:</h4>
+          <h4 style={{ color: '#d2bc8f', marginBottom: '0.5rem' }}>📋 Log de Processamento (Detalhado):</h4>
           {debugLog.map((log, i) => (
-            <div key={i} style={{ color: log.includes('❌') ? '#ef4444' : log.includes('✅') ? '#10b981' : 'white', marginBottom: '0.25rem' }}>
-              {log}
+            <div key={i} style={{ color: log.color, marginBottom: '0.25rem' }}>
+              {log.msg}
             </div>
           ))}
         </div>
@@ -477,6 +516,8 @@ const App = () => {
                     Este dashboard detecta <strong>automaticamente</strong> qual formato sua planilha está:
                     <br/>• <strong>Formato Manual:</strong> colunas com pontos já calculados (Renda=4, Escolaridade=3...)
                     <br/>• <strong>Formato Formulário:</strong> colunas com respostas em texto ("Mais de 20.000 reais"...)
+                    <br/><br/>
+                    O LOG acima mostra em detalhes como foi feita a detecção e o processamento dos seus dados.
                   </p>
                 </div>
               </div>
@@ -531,7 +572,7 @@ const App = () => {
               <h3>Arraste sua planilha aqui</h3>
               <p>ou clique para selecionar</p>
               <p style={{ fontSize: '0.85rem', marginTop: '0.5rem', opacity: 0.7 }}>
-                Aceita QUALQUER formato: Pontos ou Respostas!
+                ✨ Aceita QUALQUER formato: Pontos ou Respostas!
               </p>
             </div>
             {fileName && (
