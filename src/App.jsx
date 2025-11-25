@@ -10,6 +10,13 @@ const App = () => {
   const [fileName, setFileName] = useState('');
   const [loading, setLoading] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
+  const [debugLog, setDebugLog] = useState([]);
+
+  // Adicionar mensagem de debug
+  const addDebug = (msg) => {
+    console.log(msg);
+    setDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
+  };
 
   // Cores para cada categoria ICP
   const ICP_COLORS = {
@@ -22,45 +29,45 @@ const App = () => {
   // FUNÇÃO DE CONVERSÃO: Renda → Pontos
   const convertRenda = (renda) => {
     if (!renda) return 0;
-    const rendaLower = renda.toLowerCase();
+    const rendaLower = String(renda).toLowerCase();
     
     if (rendaLower.includes('mais de 20')) return 4;
     if (rendaLower.includes('10.001') || rendaLower.includes('20.000')) return 3;
     if (rendaLower.includes('5001') || rendaLower.includes('10.000')) return 2;
     if (rendaLower.includes('3001') || rendaLower.includes('5000')) return 1;
     if (rendaLower.includes('1501') || rendaLower.includes('3000')) return 1;
-    return 0; // Até 1500 ou não possui
+    return 0;
   };
 
   // FUNÇÃO DE CONVERSÃO: Escolaridade → Pontos
   const convertEscolaridade = (escolaridade) => {
     if (!escolaridade) return 1;
-    const escLower = escolaridade.toLowerCase();
+    const escLower = String(escolaridade).toLowerCase();
     
     if (escLower.includes('mestrado') || escLower.includes('doutorado') || escLower.includes('pós')) return 3;
     if (escLower.includes('superior')) return 2;
-    return 1; // Ensino médio ou fundamental
+    return 1;
   };
 
   // FUNÇÃO DE CONVERSÃO: Produto Digital → Pontos
   const convertProdutoDigital = (produto) => {
     if (!produto) return 0;
-    const prodLower = produto.toLowerCase();
+    const prodLower = String(produto).toLowerCase();
     
     if (prodLower.includes('já vendo') || prodLower.includes('escalar')) return 3;
     if (prodLower.includes('mas preciso melhorar') || prodLower.includes('vender mais')) return 2;
     if (prodLower.includes('ideia') || prodLower.includes('não sei como')) return 1;
-    return 0; // Não possui ou vai criar do zero
+    return 0;
   };
 
   // FUNÇÃO DE CONVERSÃO: Tempo Semanal → Pontos
   const convertTempoSemanal = (tempo) => {
     if (!tempo) return 1;
-    const tempoLower = tempo.toLowerCase();
+    const tempoLower = String(tempo).toLowerCase();
     
     if (tempoLower.includes('11') || tempoLower.includes('20')) return 3;
     if (tempoLower.includes('6') || tempoLower.includes('10')) return 2;
-    return 1; // 2-5h ou menos de 2h
+    return 1;
   };
 
   // FUNÇÃO DE CLASSIFICAÇÃO ICP
@@ -74,33 +81,50 @@ const App = () => {
   const processExcelData = useCallback((arrayBuffer) => {
     try {
       setLoading(true);
+      setDebugLog([]);
+      addDebug('🚀 Iniciando processamento...');
+      
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const sheetName = workbook.SheetNames[0];
+      addDebug(`📄 Planilha encontrada: ${sheetName}`);
+      
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      
+      addDebug(`📊 Total de linhas: ${jsonData.length}`);
+      
+      // Ver primeira linha para debug
+      if (jsonData.length > 0) {
+        const colunas = Object.keys(jsonData[0]);
+        addDebug(`📋 Colunas encontradas: ${colunas.length}`);
+        addDebug(`🔍 Colunas: ${colunas.slice(0, 5).join(', ')}...`);
+      }
 
-      console.log('Dados brutos:', jsonData); // Debug
-
-      // Processar dados com conversão automática
-      const processedLeads = jsonData.map(row => {
-        // Extrair valores das colunas do formulário
+      // Processar dados
+      const processedLeads = jsonData.map((row, index) => {
         const nome = row['Seu nome completo'] || '';
         const renda = row['Qual sua faixa de renda mensal? (suas informações são confidenciais)'] || '';
         const escolaridade = row['Qual seu grau de escolaridade?'] || '';
         const produto = row['Você já possui algum produto?'] || '';
         const tempo = row['Quanto tempo consegue se dedicar por semana para seu projeto no digital?'] || '';
 
-        // Converter para pontuações
         const rendaPts = convertRenda(renda);
         const escolaridadePts = convertEscolaridade(escolaridade);
         const produtoPts = convertProdutoDigital(produto);
         const tempoPts = convertTempoSemanal(tempo);
-        
-        // Calcular score final (sem comportamento de compra pois não está no form)
         const scoreFinal = rendaPts + escolaridadePts + produtoPts + tempoPts;
-        
-        // Classificar ICP
         const icp = classificarICP(scoreFinal);
+
+        // Debug do primeiro lead
+        if (index === 0) {
+          addDebug(`\n✅ EXEMPLO DO 1º LEAD:`);
+          addDebug(`Nome: ${nome}`);
+          addDebug(`Renda: ${rendaPts} pts (${renda})`);
+          addDebug(`Escolaridade: ${escolaridadePts} pts (${escolaridade})`);
+          addDebug(`Produto: ${produtoPts} pts (${produto})`);
+          addDebug(`Tempo: ${tempoPts} pts (${tempo})`);
+          addDebug(`SCORE: ${scoreFinal} → ${icp}`);
+        }
 
         return {
           nome,
@@ -108,10 +132,9 @@ const App = () => {
           escolaridade: escolaridadePts,
           produtoDigital: produtoPts,
           tempoSemanal: tempoPts,
-          comportamentoCompra: 0, // Não disponível no formulário
+          comportamentoCompra: 0,
           scoreFinal,
           icp,
-          // Dados originais para referência
           rendaOriginal: renda,
           escolaridadeOriginal: escolaridade,
           produtoOriginal: produto,
@@ -119,8 +142,8 @@ const App = () => {
         };
       });
 
-      // Filtrar apenas respostas completas (completed)
       const leadsCompletos = processedLeads.filter(lead => lead.nome && lead.nome.trim() !== '');
+      addDebug(`\n✅ Leads válidos: ${leadsCompletos.length}`);
 
       const processedData = {
         leads: leadsCompletos,
@@ -131,7 +154,7 @@ const App = () => {
           : 0
       };
 
-      // Calcular distribuição por ICP
+      // Distribuição por ICP
       const icpDistribution = {};
       processedData.leads.forEach(lead => {
         icpDistribution[lead.icp] = (icpDistribution[lead.icp] || 0) + 1;
@@ -143,7 +166,13 @@ const App = () => {
         percentage: ((value / processedData.totalLeads) * 100).toFixed(1)
       }));
 
-      // Distribuição por score
+      // Log da distribuição
+      addDebug(`\n📊 DISTRIBUIÇÃO POR ICP:`);
+      processedData.icpDistribution.forEach(item => {
+        addDebug(`${item.name}: ${item.value} (${item.percentage}%)`);
+      });
+
+      // Score groups
       const scoreGroups = {
         '13-16 (Elite)': 0,
         '10-12 (Black)': 0,
@@ -163,7 +192,7 @@ const App = () => {
         value
       }));
 
-      // Distribuição individual de scores
+      // Score distribution
       const scoreDistribution = {};
       processedData.leads.forEach(lead => {
         scoreDistribution[lead.scoreFinal] = (scoreDistribution[lead.scoreFinal] || 0) + 1;
@@ -176,13 +205,16 @@ const App = () => {
         }))
         .sort((a, b) => a.score - b.score);
 
-      console.log('Dados processados:', processedData); // Debug
+      addDebug(`\n🎉 PROCESSAMENTO CONCLUÍDO!`);
+      addDebug(`Score Total: ${processedData.scoreTotal}`);
+      addDebug(`Score Médio: ${processedData.scoreMedia.toFixed(1)}`);
 
       setData(processedData);
       setLoading(false);
     } catch (error) {
-      console.error('Erro ao processar planilha:', error);
-      alert('Erro ao processar a planilha. Verifique se o formato está correto.');
+      console.error('ERRO:', error);
+      addDebug(`\n❌ ERRO: ${error.message}`);
+      alert(`Erro ao processar: ${error.message}`);
       setLoading(false);
     }
   }, []);
@@ -215,6 +247,7 @@ const App = () => {
 
   const handleFile = useCallback((file) => {
     setFileName(file.name);
+    addDebug(`📁 Arquivo selecionado: ${file.name}`);
     const reader = new FileReader();
     reader.onload = (e) => {
       processExcelData(e.target.result);
@@ -247,6 +280,30 @@ const App = () => {
         </button>
       </div>
 
+      {/* Debug Log */}
+      {debugLog.length > 0 && (
+        <div style={{
+          background: '#1a2332',
+          border: '1px solid #444',
+          borderRadius: '12px',
+          padding: '1rem',
+          margin: '2rem auto',
+          maxWidth: '800px',
+          maxHeight: '300px',
+          overflow: 'auto',
+          fontFamily: 'monospace',
+          fontSize: '0.85rem',
+          color: '#d2bc8f'
+        }}>
+          <h4 style={{ color: '#d2bc8f', marginBottom: '0.5rem' }}>📋 Log de Processamento:</h4>
+          {debugLog.map((log, i) => (
+            <div key={i} style={{ color: log.includes('❌') ? '#ef4444' : log.includes('✅') ? '#10b981' : 'white', marginBottom: '0.25rem' }}>
+              {log}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Modal de Legenda */}
       {showLegend && (
         <div className="modal-overlay" onClick={() => setShowLegend(false)}>
@@ -260,7 +317,6 @@ const App = () => {
             
             <div className="modal-body">
               <div className="criteria-grid">
-                {/* Renda */}
                 <div className="criteria-card">
                   <h3>💰 Renda (Renda_pts)</h3>
                   <table className="criteria-table">
@@ -274,7 +330,6 @@ const App = () => {
                   </table>
                 </div>
 
-                {/* Escolaridade */}
                 <div className="criteria-card">
                   <h3>🎓 Escolaridade (Escolaridade_pts)</h3>
                   <table className="criteria-table">
@@ -286,7 +341,6 @@ const App = () => {
                   </table>
                 </div>
 
-                {/* Produto Digital */}
                 <div className="criteria-card">
                   <h3>💻 Produto Digital (ProdutoDigital_pts)</h3>
                   <table className="criteria-table">
@@ -299,7 +353,6 @@ const App = () => {
                   </table>
                 </div>
 
-                {/* Tempo Semanal */}
                 <div className="criteria-card">
                   <h3>⏰ Tempo Semanal (Tempo_pts)</h3>
                   <table className="criteria-table">
@@ -312,7 +365,6 @@ const App = () => {
                   </table>
                 </div>
 
-                {/* Nota sobre Comportamento */}
                 <div className="criteria-card full-width">
                   <h3>ℹ️ Observação</h3>
                   <p style={{color: '#888', fontSize: '0.9rem', lineHeight: '1.6'}}>
@@ -322,7 +374,6 @@ const App = () => {
                 </div>
               </div>
 
-              {/* Classificação Final */}
               <div className="classification-section">
                 <h2>🎯 Classificação Final ICP (por ScoreFinal)</h2>
                 <div className="classification-grid">
@@ -373,7 +424,7 @@ const App = () => {
               <h3>Arraste sua planilha aqui</h3>
               <p>ou clique para selecionar</p>
               <p style={{ fontSize: '0.85rem', marginTop: '0.5rem', opacity: 0.7 }}>
-                Formatos aceitos: .xlsx, .xls, .csv (exportado do formulário)
+                Formatos aceitos: .xlsx, .xls, .csv
               </p>
             </div>
             {fileName && (
@@ -542,6 +593,7 @@ const App = () => {
               onClick={() => {
                 setData(null);
                 setFileName('');
+                setDebugLog([]);
               }}
               className="btn-primary"
             >
