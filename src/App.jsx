@@ -12,21 +12,55 @@ const App = () => {
   const [showLegend, setShowLegend] = useState(false);
   const [debugLog, setDebugLog] = useState([]);
 
-  // Adicionar mensagem de debug
   const addDebug = (msg) => {
     console.log(msg);
     setDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
   };
 
-  // Cores para cada categoria ICP
   const ICP_COLORS = {
     'ICP 1 ELITE': '#10b981',
     'ICP 1 BLACK': '#3b82f6',
     'ICP 2': '#f59e0b',
-    'ICP 3': '#ef4444'
+    'ICP 3': '#ef4444',
+    'ICP 4': '#888'
   };
 
-  // FUNÇÃO DE CONVERSÃO: Renda → Pontos
+  // ========================================
+  // DETECÇÃO AUTOMÁTICA DE FORMATO
+  // ========================================
+  const detectarFormato = (row) => {
+    const colunas = Object.keys(row);
+    
+    // FORMATO 1: Manual (colunas com nomes curtos)
+    const temColunasManuais = 
+      colunas.some(c => c.toLowerCase() === 'renda') ||
+      colunas.some(c => c.toLowerCase() === 'escolaridade') ||
+      colunas.some(c => c.toLowerCase().includes('produto digital'));
+    
+    // FORMATO 2: Formulário (colunas com perguntas)
+    const temColunasFormulario =
+      colunas.some(c => c.includes('Qual sua faixa de renda')) ||
+      colunas.some(c => c.includes('Qual seu grau de escolaridade')) ||
+      colunas.some(c => c.includes('Você já possui algum produto'));
+    
+    if (temColunasManuais) {
+      return 'MANUAL';
+    } else if (temColunasFormulario) {
+      return 'FORMULARIO';
+    }
+    
+    // Tentar detectar pelo valor
+    const primeiroValor = row[colunas[1]]; // Segunda coluna geralmente tem dados
+    if (typeof primeiroValor === 'number' && primeiroValor <= 4) {
+      return 'MANUAL';
+    }
+    
+    return 'FORMULARIO'; // Default
+  };
+
+  // ========================================
+  // FUNÇÕES DE CONVERSÃO (para formulário)
+  // ========================================
   const convertRenda = (renda) => {
     if (!renda) return 0;
     const rendaLower = String(renda).toLowerCase();
@@ -39,7 +73,6 @@ const App = () => {
     return 0;
   };
 
-  // FUNÇÃO DE CONVERSÃO: Escolaridade → Pontos
   const convertEscolaridade = (escolaridade) => {
     if (!escolaridade) return 1;
     const escLower = String(escolaridade).toLowerCase();
@@ -49,7 +82,6 @@ const App = () => {
     return 1;
   };
 
-  // FUNÇÃO DE CONVERSÃO: Produto Digital → Pontos
   const convertProdutoDigital = (produto) => {
     if (!produto) return 0;
     const prodLower = String(produto).toLowerCase();
@@ -60,7 +92,6 @@ const App = () => {
     return 0;
   };
 
-  // FUNÇÃO DE CONVERSÃO: Tempo Semanal → Pontos
   const convertTempoSemanal = (tempo) => {
     if (!tempo) return 1;
     const tempoLower = String(tempo).toLowerCase();
@@ -70,7 +101,6 @@ const App = () => {
     return 1;
   };
 
-  // FUNÇÃO DE CLASSIFICAÇÃO ICP
   const classificarICP = (scoreFinal) => {
     if (scoreFinal >= 13) return 'ICP 1 ELITE';
     if (scoreFinal >= 10) return 'ICP 1 BLACK';
@@ -78,6 +108,92 @@ const App = () => {
     return 'ICP 3';
   };
 
+  // ========================================
+  // BUSCAR COLUNA POR SIMILARIDADE
+  // ========================================
+  const buscarColuna = (row, palavrasChave) => {
+    const colunas = Object.keys(row);
+    
+    for (const palavra of palavrasChave) {
+      const coluna = colunas.find(c => 
+        c.toLowerCase().includes(palavra.toLowerCase())
+      );
+      if (coluna) return row[coluna];
+    }
+    
+    return null;
+  };
+
+  // ========================================
+  // PROCESSAR FORMATO MANUAL
+  // ========================================
+  const processarManual = (row) => {
+    const nome = buscarColuna(row, ['nome', 'name']) || '';
+    const renda = buscarColuna(row, ['renda', 'income']) || 0;
+    const escolaridade = buscarColuna(row, ['escolaridade', 'education', 'escola']) || 0;
+    const produto = buscarColuna(row, ['produto digital', 'produto', 'product']) || 0;
+    const tempo = buscarColuna(row, ['tempo semanal', 'tempo', 'time', 'horas']) || 0;
+    const comportamento = buscarColuna(row, ['comportamento', 'compra', 'behavior']) || 0;
+    
+    // Converter para número caso venha como string
+    const rendaPts = Number(renda) || 0;
+    const escolaridadePts = Number(escolaridade) || 0;
+    const produtoPts = Number(produto) || 0;
+    const tempoPts = Number(tempo) || 0;
+    const comportamentoPts = Number(comportamento) || 0;
+    
+    const scoreFinal = rendaPts + escolaridadePts + produtoPts + tempoPts + comportamentoPts;
+    const icp = classificarICP(scoreFinal);
+    
+    return {
+      nome,
+      renda: rendaPts,
+      escolaridade: escolaridadePts,
+      produtoDigital: produtoPts,
+      tempoSemanal: tempoPts,
+      comportamentoCompra: comportamentoPts,
+      scoreFinal,
+      icp
+    };
+  };
+
+  // ========================================
+  // PROCESSAR FORMATO FORMULÁRIO
+  // ========================================
+  const processarFormulario = (row) => {
+    const nome = buscarColuna(row, ['seu nome completo', 'nome', 'name']) || '';
+    const rendaTexto = buscarColuna(row, ['qual sua faixa de renda', 'renda mensal', 'renda']) || '';
+    const escolaridadeTexto = buscarColuna(row, ['qual seu grau de escolaridade', 'escolaridade']) || '';
+    const produtoTexto = buscarColuna(row, ['você já possui algum produto', 'possui produto', 'produto']) || '';
+    const tempoTexto = buscarColuna(row, ['quanto tempo consegue se dedicar', 'tempo semanal', 'tempo']) || '';
+    
+    const rendaPts = convertRenda(rendaTexto);
+    const escolaridadePts = convertEscolaridade(escolaridadeTexto);
+    const produtoPts = convertProdutoDigital(produtoTexto);
+    const tempoPts = convertTempoSemanal(tempoTexto);
+    
+    const scoreFinal = rendaPts + escolaridadePts + produtoPts + tempoPts;
+    const icp = classificarICP(scoreFinal);
+    
+    return {
+      nome,
+      renda: rendaPts,
+      escolaridade: escolaridadePts,
+      produtoDigital: produtoPts,
+      tempoSemanal: tempoPts,
+      comportamentoCompra: 0,
+      scoreFinal,
+      icp,
+      rendaOriginal: rendaTexto,
+      escolaridadeOriginal: escolaridadeTexto,
+      produtoOriginal: produtoTexto,
+      tempoOriginal: tempoTexto
+    };
+  };
+
+  // ========================================
+  // PROCESSAMENTO PRINCIPAL
+  // ========================================
   const processExcelData = useCallback((arrayBuffer) => {
     try {
       setLoading(true);
@@ -93,58 +209,48 @@ const App = () => {
       
       addDebug(`📊 Total de linhas: ${jsonData.length}`);
       
-      // Ver primeira linha para debug
-      if (jsonData.length > 0) {
-        const colunas = Object.keys(jsonData[0]);
-        addDebug(`📋 Colunas encontradas: ${colunas.length}`);
-        addDebug(`🔍 Colunas: ${colunas.slice(0, 5).join(', ')}...`);
+      if (jsonData.length === 0) {
+        throw new Error('Planilha vazia!');
       }
-
-      // Processar dados
+      
+      // DETECÇÃO AUTOMÁTICA
+      const formato = detectarFormato(jsonData[0]);
+      addDebug(`\n🔍 FORMATO DETECTADO: ${formato}`);
+      
+      const colunas = Object.keys(jsonData[0]);
+      addDebug(`📋 Colunas encontradas: ${colunas.length}`);
+      addDebug(`🔍 Primeiras colunas: ${colunas.slice(0, 3).join(', ')}...`);
+      
+      // Processar de acordo com o formato
       const processedLeads = jsonData.map((row, index) => {
-        const nome = row['Seu nome completo'] || '';
-        const renda = row['Qual sua faixa de renda mensal? (suas informações são confidenciais)'] || '';
-        const escolaridade = row['Qual seu grau de escolaridade?'] || '';
-        const produto = row['Você já possui algum produto?'] || '';
-        const tempo = row['Quanto tempo consegue se dedicar por semana para seu projeto no digital?'] || '';
-
-        const rendaPts = convertRenda(renda);
-        const escolaridadePts = convertEscolaridade(escolaridade);
-        const produtoPts = convertProdutoDigital(produto);
-        const tempoPts = convertTempoSemanal(tempo);
-        const scoreFinal = rendaPts + escolaridadePts + produtoPts + tempoPts;
-        const icp = classificarICP(scoreFinal);
-
+        let lead;
+        
+        if (formato === 'MANUAL') {
+          lead = processarManual(row);
+        } else {
+          lead = processarFormulario(row);
+        }
+        
         // Debug do primeiro lead
         if (index === 0) {
           addDebug(`\n✅ EXEMPLO DO 1º LEAD:`);
-          addDebug(`Nome: ${nome}`);
-          addDebug(`Renda: ${rendaPts} pts (${renda})`);
-          addDebug(`Escolaridade: ${escolaridadePts} pts (${escolaridade})`);
-          addDebug(`Produto: ${produtoPts} pts (${produto})`);
-          addDebug(`Tempo: ${tempoPts} pts (${tempo})`);
-          addDebug(`SCORE: ${scoreFinal} → ${icp}`);
+          addDebug(`Nome: ${lead.nome}`);
+          addDebug(`Renda: ${lead.renda} pts`);
+          addDebug(`Escolaridade: ${lead.escolaridade} pts`);
+          addDebug(`Produto: ${lead.produtoDigital} pts`);
+          addDebug(`Tempo: ${lead.tempoSemanal} pts`);
+          if (lead.comportamentoCompra > 0) {
+            addDebug(`Comportamento: ${lead.comportamentoCompra} pts`);
+          }
+          addDebug(`SCORE: ${lead.scoreFinal} → ${lead.icp}`);
         }
-
-        return {
-          nome,
-          renda: rendaPts,
-          escolaridade: escolaridadePts,
-          produtoDigital: produtoPts,
-          tempoSemanal: tempoPts,
-          comportamentoCompra: 0,
-          scoreFinal,
-          icp,
-          rendaOriginal: renda,
-          escolaridadeOriginal: escolaridade,
-          produtoOriginal: produto,
-          tempoOriginal: tempo
-        };
+        
+        return lead;
       });
-
+      
       const leadsCompletos = processedLeads.filter(lead => lead.nome && lead.nome.trim() !== '');
       addDebug(`\n✅ Leads válidos: ${leadsCompletos.length}`);
-
+      
       const processedData = {
         leads: leadsCompletos,
         totalLeads: leadsCompletos.length,
@@ -153,25 +259,24 @@ const App = () => {
           ? leadsCompletos.reduce((sum, lead) => sum + lead.scoreFinal, 0) / leadsCompletos.length 
           : 0
       };
-
+      
       // Distribuição por ICP
       const icpDistribution = {};
       processedData.leads.forEach(lead => {
         icpDistribution[lead.icp] = (icpDistribution[lead.icp] || 0) + 1;
       });
-
+      
       processedData.icpDistribution = Object.entries(icpDistribution).map(([name, value]) => ({
         name,
         value,
         percentage: ((value / processedData.totalLeads) * 100).toFixed(1)
       }));
-
-      // Log da distribuição
+      
       addDebug(`\n📊 DISTRIBUIÇÃO POR ICP:`);
       processedData.icpDistribution.forEach(item => {
         addDebug(`${item.name}: ${item.value} (${item.percentage}%)`);
       });
-
+      
       // Score groups
       const scoreGroups = {
         '13-16 (Elite)': 0,
@@ -179,36 +284,37 @@ const App = () => {
         '6-9 (Regular)': 0,
         '1-5 (Baixo)': 0
       };
-
+      
       processedData.leads.forEach(lead => {
         if (lead.scoreFinal >= 13) scoreGroups['13-16 (Elite)']++;
         else if (lead.scoreFinal >= 10) scoreGroups['10-12 (Black)']++;
         else if (lead.scoreFinal >= 6) scoreGroups['6-9 (Regular)']++;
         else scoreGroups['1-5 (Baixo)']++;
       });
-
+      
       processedData.scoreGroups = Object.entries(scoreGroups).map(([name, value]) => ({
         name,
         value
       }));
-
+      
       // Score distribution
       const scoreDistribution = {};
       processedData.leads.forEach(lead => {
         scoreDistribution[lead.scoreFinal] = (scoreDistribution[lead.scoreFinal] || 0) + 1;
       });
-
+      
       processedData.scoreDistribution = Object.entries(scoreDistribution)
         .map(([score, count]) => ({
           score: parseInt(score),
           count
         }))
         .sort((a, b) => a.score - b.score);
-
+      
       addDebug(`\n🎉 PROCESSAMENTO CONCLUÍDO!`);
+      addDebug(`Formato usado: ${formato}`);
       addDebug(`Score Total: ${processedData.scoreTotal}`);
       addDebug(`Score Médio: ${processedData.scoreMedia.toFixed(1)}`);
-
+      
       setData(processedData);
       setLoading(false);
     } catch (error) {
@@ -366,10 +472,11 @@ const App = () => {
                 </div>
 
                 <div className="criteria-card full-width">
-                  <h3>ℹ️ Observação</h3>
+                  <h3>ℹ️ Detecção Automática</h3>
                   <p style={{color: '#888', fontSize: '0.9rem', lineHeight: '1.6'}}>
-                    O critério <strong>"Comportamento de Compra"</strong> não está disponível neste formulário, 
-                    por isso não é incluído no cálculo. O score máximo possível é <strong>13 pontos</strong> (ao invés de 16).
+                    Este dashboard detecta <strong>automaticamente</strong> qual formato sua planilha está:
+                    <br/>• <strong>Formato Manual:</strong> colunas com pontos já calculados (Renda=4, Escolaridade=3...)
+                    <br/>• <strong>Formato Formulário:</strong> colunas com respostas em texto ("Mais de 20.000 reais"...)
                   </p>
                 </div>
               </div>
@@ -424,7 +531,7 @@ const App = () => {
               <h3>Arraste sua planilha aqui</h3>
               <p>ou clique para selecionar</p>
               <p style={{ fontSize: '0.85rem', marginTop: '0.5rem', opacity: 0.7 }}>
-                Formatos aceitos: .xlsx, .xls, .csv
+                Aceita QUALQUER formato: Pontos ou Respostas!
               </p>
             </div>
             {fileName && (
@@ -440,8 +547,8 @@ const App = () => {
       {loading && (
         <div className="loading">
           <div className="loading-spinner"></div>
-          <h3 style={{ color: 'white' }}>Processando suas respostas...</h3>
-          <p>Convertendo automaticamente para pontuação ICP</p>
+          <h3 style={{ color: 'white' }}>Detectando formato...</h3>
+          <p>Processando automaticamente</p>
         </div>
       )}
 
